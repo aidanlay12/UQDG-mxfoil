@@ -1,3 +1,8 @@
+import os
+import numpy as np
+import pandas as pd
+from cfdverify.discretization import Classic
+
 
 class uq_analysis:
     """

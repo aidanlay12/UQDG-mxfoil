@@ -1,11 +1,11 @@
 import os
-import csv
 import sys
 import re
 import numpy as np
 import pandas as pd
 from subprocess import Popen, TimeoutExpired, DEVNULL
 from time import monotonic as timer
+sys.path.append(os.path.join(os.getcwd(), "src/solvers"))
 from mfoil import *
 
 
@@ -74,7 +74,6 @@ class solver_eval:
         # Read first two rows for headers
         with open(csv_path, 'r') as f:
             first_header = f.readline().strip().split(',')
-            second_header = f.readline().strip().split(',')
         
         self.solver = first_header[0]
         self.d = int(first_header[1])
@@ -82,6 +81,7 @@ class solver_eval:
 
         #Use pandas to read the CSV file
         self.df = pd.read_csv(csv_path, skiprows=1)
+        self.input_names = self.df.columns.tolist()  # Get input variable names from the DataFrame
     
 
     def xsolve(self):

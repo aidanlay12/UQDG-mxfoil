@@ -3,7 +3,7 @@ import pandas as pd
 import os
 import math
 import ast
-from UQDG-mxfoil.uq_analysis import *
+from UQDGmxfoil.uq_analysis import *
 
 
 class poly_model:
