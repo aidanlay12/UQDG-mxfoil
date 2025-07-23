@@ -56,7 +56,7 @@ class poly_model:
         # Cross-terms (only for p > 1): products of basis functions for variable pairs
         if self.p > 1:
             for i in range(self.n):
-                for j in range(i, self.n):
+                for j in range(i + 1, self.n):
                     pb[idx] = self.basis(in_sample[i], 1) * self.basis(in_sample[j], 1)
                     idx += 1
 
@@ -75,7 +75,7 @@ class poly_model:
         self.p = polynomial_degree  # Degree of polynomial chaos interpolation
         # Determine n from input sample
         try:
-            sample_df = pd.read_csv(self.dir + "/input/" + in_sample, delimiter=',')
+            sample_df = pd.read_csv(self.dir + "/input/" + in_sample, delimiter=',',skiprows=1)
         except Exception as e:
             raise IOError(f"Failed to read input CSV for n determination: {e}")
         self.n = sample_df.shape[1]
@@ -116,15 +116,14 @@ class poly_model:
         else:
             header = [f'out_model_{i+1}' for i in range(Nsol)]
         df = pd.DataFrame(sol, columns=header)
-        if xmin is not None and xmax is not None:
-            if not (isinstance(xmin, (np.ndarray, list)) and isinstance(xmax, (np.ndarray, list))):
-                raise TypeError("xmin and xmax must be array-like.")
-            if len(xmin) != self.n or len(xmax) != self.n:
-                raise ValueError(f"xmin and xmax must have length n={self.n}.")
-            df['xmin'] = xmin
-            df['xmax'] = xmax
         try:
-            df.to_csv(self.dir + '/input/' + poly_coefficients_csv, index=False)
+            out_path = self.dir + '/input/' + poly_coefficients_csv
+            with open(out_path, 'w') as f:
+                # Write xmin row
+                f.write(','.join([str(float(x)) for x in xmin]) + '\n')
+                # Write xmax row
+                f.write(','.join([str(float(x)) for x in xmax]) + '\n')
+            df.to_csv(out_path, mode='a', index=False)
         except Exception as e:
             raise IOError(f"Failed to write coefficients CSV: {e}")
     
@@ -137,21 +136,24 @@ class poly_model:
             xmin (array-like): Minimum values for normalization.
             xmax (array-like): Maximum values for normalization.
         """
-        try:
-            self.name_sample = in_sample
-            self.in_sample = pd.read_csv(self.dir + "/input/" + in_sample, delimiter=',')
-        except Exception as e:
-            raise IOError(f"Failed to read input CSV: {e}")
-        try:
-            uqa = uq_analysis()
-            self.in_sample = uqa.removed_failed_cases(self.name_sample)
-        except Exception as e:
-            raise RuntimeError(f"Failed to remove failed cases: {e}")
-        self.Ns = self.in_sample.shape[0]
+        # Convert string representations to arrays if needed
+        if isinstance(xmin, str) and xmin != 'None':
+            xmin = np.array(ast.literal_eval(xmin))
+        if isinstance(xmax, str) and xmax != 'None':
+            xmax = np.array(ast.literal_eval(xmax))
+        if xmin is None or xmax is None:
+            raise TypeError("xmin and xmax must be array-like and not None.")
         if not (isinstance(xmin, (np.ndarray, list)) and isinstance(xmax, (np.ndarray, list))):
             raise TypeError("xmin and xmax must be array-like.")
         if len(xmin) != self.n or len(xmax) != self.n:
             raise ValueError(f"xmin and xmax must have length n={self.n}.")
+        try:
+            uqa = uq_analysis()
+            self.name_sample = in_sample
+            self.in_sample = uqa.removed_failed_cases(self.name_sample)
+        except Exception as e:
+            raise RuntimeError(f"Failed to remove failed cases: {e}")
+        self.Ns = self.in_sample.shape[0]
         self.std_sample = np.zeros(self.in_sample.shape)
         for i, col in enumerate(self.in_sample.columns):
             try:
@@ -167,18 +169,20 @@ class poly_model:
             input_csv (str): Input sample CSV filename.
             poly_c_csv (str): CSV file with surrogate coefficients and normalization bounds.
         """
+        # Read first two rows for xmin/xmax, then coefficients
         try:
-            pc = pd.read_csv(self.dir + "/input/" + poly_c_csv)
+            with open(self.dir + "/input/" + poly_c_csv, 'r') as f:
+                lines = f.readlines()
+                if len(lines) < 2:
+                    raise ValueError("Coefficient CSV missing xmin/xmax rows.")
+                xmin = np.array([float(x) for x in lines[0].strip().split(',')])
+                xmax = np.array([float(x) for x in lines[1].strip().split(',')])
+            pc = pd.read_csv(self.dir + "/input/" + poly_c_csv, skiprows=2, delimiter=',')
         except Exception as e:
             raise IOError(f"Failed to read coefficients CSV: {e}")
         header = list(pc.columns)
-        coeff_cols = [col for col in header if col not in ['xmin', 'xmax']]
+        coeff_cols = header
         pc_matrix = pc[coeff_cols].values
-        xmin = pc['xmin'].iloc[0] if 'xmin' in pc.columns else None
-        xmax = pc['xmax'].iloc[0] if 'xmax' in pc.columns else None
-        if xmin is not None and xmax is not None:
-            xmin = np.array(ast.literal_eval(str(xmin))) if isinstance(xmin, str) else np.array(xmin)
-            xmax = np.array(ast.literal_eval(str(xmax))) if isinstance(xmax, str) else np.array(xmax)
         self.std_out(input_csv, xmin, xmax)
         try:
             PB = np.array([self.poly_basis(sample) for sample in self.std_sample])
@@ -189,7 +193,8 @@ class poly_model:
         except Exception as e:
             raise ValueError(f"Error in surrogate evaluation (matrix multiplication): {e}")
         output_csv = self.dir + '/output/' + self.name_sample[:-4] + '_' + poly_c_csv[:-4] + "_sout.csv"
+        # Add headers to output CSV
         try:
-            pd.DataFrame(sol).to_csv(output_csv, index=False, header=False)
+            pd.DataFrame(sol, columns=header).to_csv(output_csv, index=False, header=True)
         except Exception as e:
             raise IOError(f"Failed to write surrogate output CSV: {e}")

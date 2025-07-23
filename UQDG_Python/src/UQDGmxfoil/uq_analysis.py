@@ -10,8 +10,8 @@ class uq_analysis:
     It calculates the uncertainty of the output data using the Monte Carlo method.
     """
 
-    def __init__(self, dir):
-        self.dir = dir
+    def __init__(self):
+        self.dir = os.getcwd()
         self.nout = 0
         self.Np = 0
         self.CMlim = np.float64([-0.05,-0.044]) #Moment coefficient range for P-box in challenge problem
@@ -23,7 +23,7 @@ class uq_analysis:
         The failed cases are stored in a separate file.
         """
         # Loads the input data from the solver
-        df = pd.read_csv(self.dir+'/input/'+csv_file, delimiter=',')    
+        df = pd.read_csv(self.dir+'/input/'+csv_file, delimiter=',',skiprows=1)    
 
         fail_path = self.dir+'/output/'+csv_file[:-4]+'_fail.csv'
         # Remove failed cases from input DataFrame if fail file exists

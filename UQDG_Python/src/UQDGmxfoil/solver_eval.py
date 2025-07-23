@@ -172,8 +172,8 @@ class solver_eval:
         input_file.write("vpar\n")
         input_file.write(f"xtr {self.df['xtr_upper'][input_index]} {self.df['xtr_lower'][input_index]}\n")
         if include_eps:
-            input_file.write(f"eps {self.conv_tol}\n\n")
-        input_file.write("pacc 1\n")
+            input_file.write(f"eps {self.conv_tol}\n")
+        input_file.write("\n pacc 1\n")
         input_file.write(self.dir + "/output/" + self.polar_file + "\n\n")
         input_file.write(f"ITER {self.num_of_iter}\n")
         input_file.write(f"alfa {self.df['alpha'][input_index]}\n\nquit\n")
@@ -195,9 +195,6 @@ class solver_eval:
         # Write header if file does not exist
         if not os.path.exists(out_path):
             pd.DataFrame(columns=["Cl", "Cm"]).to_csv(out_path, index=False)
-        if not os.path.exists(fail_path):
-            fail_columns = ["Index"] + self.input_names
-            pd.DataFrame(columns=fail_columns).to_csv(fail_path, index=False)
 
         # Loop through all samples
         for i in range(self.Ns):
@@ -208,6 +205,10 @@ class solver_eval:
                     out_path, mode='a', header=False, index=False
                 )
             else:
+                # Write fail file only if a failed case occurs
+                fail_columns = ["Index"] + self.input_names
+                if not os.path.exists(fail_path):
+                    pd.DataFrame(columns=fail_columns).to_csv(fail_path, index=False)
                 pd.DataFrame([np.append(i, self.fx[i, :])]).to_csv(
                     fail_path, mode='a', header=False, index=False
                 )
