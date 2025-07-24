@@ -1,0 +1,48 @@
+# Ignore all CSV and IN files
+*.csv
+*.in
+*.txt
+
+# Python cache and build artifacts
+__pycache__/
+*.py[cod]
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+*.pyo
+*.pyd
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv/
+.python-version
+
+# IDE/editor files
+.vscode/
+.idea/
+*.swp
+
+# Test and coverage reports
+htmlcov/
+.tox/
+.coverage
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+
+# pipenv, poetry, and toml-related files
+Pipfile.lock
+poetry.lock
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Misc
+.DS_Store
+*.log
