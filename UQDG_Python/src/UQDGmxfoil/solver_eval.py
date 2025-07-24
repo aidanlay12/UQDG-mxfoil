@@ -8,6 +8,9 @@ from time import monotonic as timer
 sys.path.append(os.path.join(os.getcwd(), "src/solvers"))
 from mfoil import *
 
+# WARNING:
+# Forced transition (xtr_upper, xtr_lower) as used in the UQDG challenge problem is NOT available for the Python version of mfoil.
+# If you require forced transition, use the MATLAB version of mfoil.
 
 
 def check_line_data(file_path, line_number):
@@ -130,7 +133,6 @@ class solver_eval:
         Runs mfoil for a single case.
         Sets solver parameters, runs, and saves results to self.results.
         """
-
         msolve.param.doplot = False #Does not print the plots
         msolve.param.rtol = self.conv_tol #Convergence tolerance for mfoil
         msolve.param.verb = 0 #Hides the prints of mfoil
@@ -153,20 +155,22 @@ class solver_eval:
         Writes the xfoil input script for a single case.
         Args:
             input_index (int): Index of the sample in the DataFrame.
-            panel_size (int, optional): Number of panels (default: self.panel_size).
+            panel_size (int, optional): Number of panels (default: self.panel_size or from CSV).
             include_eps (bool): Whether to include eps line (for xmfoil/gci).
         Structure:
             - Loads airfoil, sets geometry, panels, flow conditions, and output file.
             - Optionally adds eps line for changing the tolerance (Not available using default xfoil).
         """
-        panel_size = panel_size if panel_size is not None else self.panel_size
+
+        panel_size_val = panel_size if panel_size is not None else self.panel_size
+
         input_file = open(self.dir + "/input/" + self.xinput_file, "w")
         input_file.write("PLOP\nG F\n\n")
         input_file.write(self.airfoil_name + '\n')
         input_file.write("GDES\nflap\n0.7\n999\n0.50\n")
         input_file.write(f"{self.df['flap_deflection'][input_index]}\nexec\n\n")
         input_file.write("ppar\n")
-        input_file.write(f"n {panel_size}\n\n\n")
+        input_file.write(f"n {panel_size_val}\n\n\n")
         input_file.write("OPER\nmach 0\n")
         input_file.write(f"Visc {self.df['Re'][input_index]}\n")
         input_file.write("vpar\n")
@@ -241,7 +245,11 @@ class solver_eval:
         Returns:
             None. Results are stored in self.results as [Cl, Cm].
         """
-        panel = panel_size if panel_size is not None else self.panel_size
+        # Check if 'panel_size' column exists in input CSV and use its value if present
+        if 'panel_size' in self.df.columns:
+            panel = int(self.df['panel_size'][input_index])
+        else:
+            panel = panel_size if panel_size is not None else self.panel_size
 
         if self.solver == 'xfoil':
             self.write_xfoil_input(input_index, panel_size=panel, include_eps=include_eps)
@@ -252,7 +260,7 @@ class solver_eval:
             m = mfoil(naca=mfoil_airfoil, npanel=panel)
             m.geom_flap(np.float64([0.7, 0.015]), self.df['flap_deflection'][input_index])
             m.setoper(alpha=self.df['alpha'][input_index], Re=self.df['Re'][input_index], Ma=0, visc=True)
-            m.vsol.xt = np.float64([self.df['xtr_upper'][input_index], self.df['xtr_lower'][input_index]])
             self.msolve(m)
         else:
             print("INCORRECT SOLVER")
+

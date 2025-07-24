@@ -23,26 +23,21 @@ class poly_model:
     def __init__(self):
         self.dir = os.getcwd()
 
-    def basis(self,x,d):
-        #Uses the Legrende polynomials
-        b = [1,x,0.5*(3*x**2 - 1)]
-        return b[d]  
-        
+    def basis(self, x, d):
+        # Legendre polynomial basis up to degree 2
+        b = [1, x, 0.5 * (3 * x ** 2 - 1)]
+        return b[d]
+
     def poly_basis(self, in_sample):
         """
         Generates the polynomial basis vector for a given standardized input sample.
         Args:
-            in_sample (array-like): Standardized input sample.
+            in_sample (np.ndarray): Standardized input sample (1D numpy array).
         Returns:
             np.ndarray: Vector of polynomial basis coefficients.
-        Raises:
-            ValueError: If in_sample is not the expected length.
         """
-        if self.n is None:
-            raise ValueError("self.n must be set before calling poly_basis.")
-        if len(in_sample) != self.n:
-            raise ValueError(f"Input sample length {len(in_sample)} does not match expected n={self.n}.")
-
+        # Ensure input is numpy array
+        in_sample = np.array(in_sample)
         pb = np.zeros(self.npb)
         pb[0] = 1  # Constant term
 
@@ -61,26 +56,27 @@ class poly_model:
                     idx += 1
 
         return pb
-                        
 
-    def assemble_surrogate(self, in_sample, polynomial_degree, xmin, xmax, poly_coefficients_csv):
+    def assemble_surrogate(self, csv_input, polynomial_degree, xmin, xmax, poly_coefficients_csv):
         """
         Assembles the polynomial chaos surrogate and saves coefficients and normalization bounds in one step.
         Args:
-            in_sample (str): Input sample CSV filename.
-            xmin (array-like): Minimum values for each variable for normalization.
-            xmax (array-like): Maximum values for each variable for normalization.
+            csv_input (str): Input sample CSV filename.
+            polynomial_degree (int): Degree of polynomial chaos interpolation.
+            xmin (np.ndarray): Minimum values for each variable for normalization.
+            xmax (np.ndarray): Maximum values for each variable for normalization.
             poly_coefficients_csv (str): Output CSV filename for coefficients.
         """
-        self.p = polynomial_degree  # Degree of polynomial chaos interpolation
-        # Determine n from input sample
-        try:
-            sample_df = pd.read_csv(self.dir + "/input/" + in_sample, delimiter=',',skiprows=1)
-        except Exception as e:
-            raise IOError(f"Failed to read input CSV for n determination: {e}")
+        # Ensure xmin/xmax are numpy arrays
+        xmin = np.array(xmin)
+        xmax = np.array(xmax)
+        # Read input sample and determine n
+        sample_df = pd.read_csv(self.dir + "/input/" + csv_input, delimiter=',', skiprows=1)
         self.n = sample_df.shape[1]
+        self.p = polynomial_degree
         self.npb = int(math.factorial(self.n + self.p) / (math.factorial(self.n) * math.factorial(self.p)))
-        self.std_out(in_sample, xmin, xmax)
+        # Standardize and assemble
+        self.std_out(csv_input, xmin, xmax)
         self.assem(poly_coefficients_csv, xmin, xmax)
 
     def assem(self, poly_coefficients_csv, xmin=None, xmax=None):
@@ -89,79 +85,59 @@ class poly_model:
         Also saves normalization bounds as columns in the output CSV.
         Args:
             poly_coefficients_csv (str): Output CSV filename for coefficients.
-            xmin (array-like, optional): Minimum values for normalization.
-            xmax (array-like, optional): Maximum values for normalization.
+            xmin (np.ndarray, optional): Minimum values for normalization.
+            xmax (np.ndarray, optional): Maximum values for normalization.
         """
-        try:
-            self.out_sample = pd.read_csv(self.dir + '/output/' + self.name_sample[:-4] + '_out.csv', delimiter=',')
-        except Exception as e:
-            raise IOError(f"Failed to read output CSV: {e}")
+        # Read output sample
+        self.out_sample = pd.read_csv(self.dir + '/output/' + self.name_sample[:-4] + '_out.csv', delimiter=',')
         Nsol = self.out_sample.shape[1]
         output_header = self.out_sample.columns.tolist()
         sol = np.zeros((self.npb, Nsol))
+        # Loop over each output variable
         for j in range(Nsol):
             A = np.zeros((self.Ns, self.npb))
             b = self.out_sample[output_header[j]]
+            # Build design matrix for least squares
             for i in range(self.Ns):
-                try:
-                    A[i, :] = self.poly_basis(self.std_sample[i, :])
-                except Exception as e:
-                    raise ValueError(f"Error in poly_basis for sample {i}: {e}")
-            try:
-                sol[0:self.npb, j] = np.linalg.lstsq(A, b, rcond=None)[0]
-            except Exception as e:
-                raise ValueError(f"Least squares failed for output {output_header[j]}: {e}")
+                A[i, :] = self.poly_basis(self.std_sample[i, :])
+            # Solve least squares for coefficients
+            sol[0:self.npb, j] = np.linalg.lstsq(A, b, rcond=None)[0]
+        # Prepare header for output CSV
         if Nsol == 2:
             header = ['Cl_model', 'Cm_model']
         else:
             header = [f'out_model_{i+1}' for i in range(Nsol)]
         df = pd.DataFrame(sol, columns=header)
-        try:
-            out_path = self.dir + '/input/' + poly_coefficients_csv
-            with open(out_path, 'w') as f:
-                # Write xmin row
-                f.write(','.join([str(float(x)) for x in xmin]) + '\n')
-                # Write xmax row
-                f.write(','.join([str(float(x)) for x in xmax]) + '\n')
-            df.to_csv(out_path, mode='a', index=False)
-        except Exception as e:
-            raise IOError(f"Failed to write coefficients CSV: {e}")
-    
-    def std_out(self, in_sample, xmin, xmax):
+        out_path = self.dir + '/input/' + poly_coefficients_csv
+        # Write normalization bounds and coefficients to CSV
+        with open(out_path, 'w') as f:
+            f.write(','.join([str(float(x)) for x in xmin]) + '\n')
+            f.write(','.join([str(float(x)) for x in xmax]) + '\n')
+        df.to_csv(out_path, mode='a', index=False)
+
+    def std_out(self, in_sample_csv, xmin, xmax):
         """
         Loads and standardizes input data using provided normalization bounds.
         Removes failed samples using UQ analysis.
         Args:
-            in_sample (str): Input sample CSV filename.
-            xmin (array-like): Minimum values for normalization.
-            xmax (array-like): Maximum values for normalization.
+            in_sample_csv (str): Input sample CSV filename.
+            xmin (np.ndarray): Minimum values for normalization.
+            xmax (np.ndarray): Maximum values for normalization.
         """
-        # Convert string representations to arrays if needed
-        if isinstance(xmin, str) and xmin != 'None':
-            xmin = np.array(ast.literal_eval(xmin))
-        if isinstance(xmax, str) and xmax != 'None':
-            xmax = np.array(ast.literal_eval(xmax))
-        if xmin is None or xmax is None:
-            raise TypeError("xmin and xmax must be array-like and not None.")
-        if not (isinstance(xmin, (np.ndarray, list)) and isinstance(xmax, (np.ndarray, list))):
-            raise TypeError("xmin and xmax must be array-like.")
-        if len(xmin) != self.n or len(xmax) != self.n:
-            raise ValueError(f"xmin and xmax must have length n={self.n}.")
-        try:
-            uqa = uq_analysis()
-            self.name_sample = in_sample
-            self.in_sample = uqa.removed_failed_cases(self.name_sample)
-        except Exception as e:
-            raise RuntimeError(f"Failed to remove failed cases: {e}")
+        # Ensure xmin/xmax are numpy arrays
+        xmin = np.array(xmin)
+        xmax = np.array(xmax)
+        self.name_sample = in_sample_csv
+        # Remove failed cases using UQ analysis
+        uqa = uq_analysis()
+        self.in_sample = uqa.removed_failed_cases(self.name_sample)
         self.Ns = self.in_sample.shape[0]
         self.std_sample = np.zeros(self.in_sample.shape)
+        # Standardize each column
         for i, col in enumerate(self.in_sample.columns):
-            try:
-                self.std_sample[:, i] = (self.in_sample[col] - xmin[i]) / (xmax[i] - xmin[i])
-            except Exception as e:
-                raise ValueError(f"Error normalizing column {col}: {e}")
+            self.std_sample[:, i] = (self.in_sample[col] - xmin[i]) / (xmax[i] - xmin[i])
 
-    def evaluate_surrogate(self, input_csv, poly_c_csv):
+    def evaluate_surrogate(self, csv_input, poly_c_csv):
         """
         Evaluates the polynomial chaos surrogate using coefficients and normalization bounds from CSV.
         Standardizes the input data and computes surrogate predictions for all samples.
@@ -169,32 +145,22 @@ class poly_model:
             input_csv (str): Input sample CSV filename.
             poly_c_csv (str): CSV file with surrogate coefficients and normalization bounds.
         """
-        # Read first two rows for xmin/xmax, then coefficients
-        try:
-            with open(self.dir + "/input/" + poly_c_csv, 'r') as f:
-                lines = f.readlines()
-                if len(lines) < 2:
-                    raise ValueError("Coefficient CSV missing xmin/xmax rows.")
-                xmin = np.array([float(x) for x in lines[0].strip().split(',')])
-                xmax = np.array([float(x) for x in lines[1].strip().split(',')])
-            pc = pd.read_csv(self.dir + "/input/" + poly_c_csv, skiprows=2, delimiter=',')
-        except Exception as e:
-            raise IOError(f"Failed to read coefficients CSV: {e}")
+        # Read normalization bounds from first two rows of coefficients CSV
+        with open(self.dir + "/input/" + poly_c_csv, 'r') as f:
+            lines = f.readlines()
+            xmin = np.array([float(x) for x in lines[0].strip().split(',')])
+            xmax = np.array([float(x) for x in lines[1].strip().split(',')])
+        # Read coefficients
+        pc = pd.read_csv(self.dir + "/input/" + poly_c_csv, skiprows=2, delimiter=',')
         header = list(pc.columns)
         coeff_cols = header
         pc_matrix = pc[coeff_cols].values
-        self.std_out(input_csv, xmin, xmax)
-        try:
-            PB = np.array([self.poly_basis(sample) for sample in self.std_sample])
-        except Exception as e:
-            raise ValueError(f"Error computing polynomial basis: {e}")
-        try:
-            sol = PB @ pc_matrix
-        except Exception as e:
-            raise ValueError(f"Error in surrogate evaluation (matrix multiplication): {e}")
+        # Standardize input samples
+        self.std_out(csv_input, xmin, xmax)
+        # Build polynomial basis for all samples
+        PB = np.array([self.poly_basis(sample) for sample in self.std_sample])
+        # Surrogate prediction
+        sol = PB @ pc_matrix
         output_csv = self.dir + '/output/' + self.name_sample[:-4] + '_' + poly_c_csv[:-4] + "_sout.csv"
-        # Add headers to output CSV
-        try:
-            pd.DataFrame(sol, columns=header).to_csv(output_csv, index=False, header=True)
-        except Exception as e:
-            raise IOError(f"Failed to write surrogate output CSV: {e}")
+        # Write predictions to output CSV
+        pd.DataFrame(sol, columns=header).to_csv(output_csv, index=False, header=True)

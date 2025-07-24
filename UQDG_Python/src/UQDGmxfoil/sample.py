@@ -8,10 +8,6 @@ class sample:
     """
     Unified sampler for generating input samples for various distributions and sampling methods.
 
-    Args:
-        num_samples (int): Number of samples.
-        solver (str): Solver type (e.g., 'xfoil', 'mfoil').
-
     Attributes:
         Ns (int): Number of samples.
         solver (str): Solver type.
@@ -47,68 +43,50 @@ class sample:
             num_samples (int, optional): Override number of samples for this call.
             solver (str, optional): Override solver type for this call.
             input_names (list): List of input variable names.
-
-        Raises:
-            ValueError: If sample generation fails.
         """
+        # Set sample size and solver if provided
         if num_samples is not None:
             self.Ns = num_samples
         if solver is not None:
             self.solver = solver
+        # Handle GCI mode
         if dist_type == 'gci':
-            if gci_panels is None:
-                raise ValueError("gci_panels must be provided for GCI study.")
             self.d = len(param1)
             self.fx = np.tile(param1, (self.Ns, 1))
             self.gci_panels = np.array(gci_panels).reshape(-1, 1)
             self.save_samples(csv_name, gci_mode=True, input_names=input_names)
         else:
-            try:
-                self.fx = self.sample(dist_type, method, param1, param2)
-            except Exception as e:
-                raise ValueError(f"Sample generation failed: {e}")
+            # Generate samples for other distributions
+            self.fx = self.sample(dist_type, method, param1, param2)
             self.save_samples(csv_name, input_names=input_names)
 
     def save_samples(self, csv_name, input_names=None, gci_mode=False):
         """
         Save generated samples to a CSV file with two headers.
-        The first header is [solver, d, Ns].
-        The second header is the input variable names (plus 'panel_size' for GCI mode).
 
         Args:
             csv_name (str): Output CSV filename.
             input_names (list, optional): List of input variable names.
                 Defaults to ['alpha', 'Re', 'flap_deflection', 'xtr_upper', 'xtr_lower'].
             gci_mode (bool): If True, append 'panel_size' column for GCI study.
-
-        Raises:
-            ValueError: If samples are not generated or have mismatched dimensions.
-            IOError: If file writing fails.
         """
+        # Set default input names if not provided
         if input_names is None:
             input_names = ['alpha', 'Re', 'flap_deflection', 'xtr_upper', 'xtr_lower']
         header1 = [self.solver, self.d, self.Ns]
         header2 = input_names.copy()
+        # Add panel_size column for GCI mode
         if gci_mode:
             header2.append('panel_size')
-            if not hasattr(self, 'gci_panels'):
-                raise ValueError("gci_panels attribute missing for GCI mode.")
             df = pd.DataFrame(np.hstack([self.fx, self.gci_panels]), columns=header2)
         else:
-            if self.fx is None:
-                raise ValueError("No samples to save. Generate samples first.")
-            if self.fx.shape[1] != len(header2):
-                raise ValueError(f"Sample dimension {self.fx.shape[1]} does not match input_names length {len(header2)}.")
             df = pd.DataFrame(self.fx, columns=header2)
-
         out_path = self.dir + '/input/' + csv_name
-        try:
-            with open(out_path, 'w', newline='') as f:
-                f.write(','.join(map(str, header1)) + '\n')
-                f.write(','.join(header2) + '\n')
-            df.to_csv(out_path, mode='a', index=False, header=False)
-        except Exception as e:
-            raise IOError(f"Failed to write samples to file: {e}")
+        # Write headers and data to CSV
+        with open(out_path, 'w', newline='') as f:
+            f.write(','.join(map(str, header1)) + '\n')
+            f.write(','.join(header2) + '\n')
+        df.to_csv(out_path, mode='a', index=False, header=False)
 
     def sample(self, dist_type, method, param1, param2):
         """
@@ -122,10 +100,8 @@ class sample:
 
         Returns:
             np.ndarray: Generated samples.
-
-        Raises:
-            ValueError: If distribution type or method is invalid.
         """
+        # Set distribution parameters and dimension
         if dist_type == 'normal':
             mean = np.array(param1)
             std = np.array(param2)
@@ -138,15 +114,15 @@ class sample:
             xmin = np.array(param1)
             xmax = np.array(param2)
             self.d = xmin.size
+            # Factorial grid for epistemic
             if method == 'factorial':
                 n = int(self.Ns ** (1 / self.d))
-                if self.d != 5:
-                    raise ValueError("Epistemic factorial sampling only implemented for d=5.")
                 ls = np.zeros((n, self.d))
                 for i in range(self.d):
                     ls[:, i] = np.linspace(xmin[i], xmax[i], n)
                 fx = np.zeros((n ** self.d, self.d))
                 zz = 0
+                # Nested loops for grid sampling
                 for i in range(n):
                     for j in range(n):
                         for z in range(n):
@@ -156,11 +132,6 @@ class sample:
                                     zz += 1
                 self.fx = fx
                 return self.fx
-            else:
-                raise ValueError("Only 'factorial' method is supported for epistemic distribution.")
-        else:
-            raise ValueError("Unknown distribution type.")
-
         # Generate standard uniform samples
         if method == 'sobol':
             su = Sobol(self.d).random(self.Ns)
@@ -168,9 +139,6 @@ class sample:
             su = LatinHypercube(self.d).random(self.Ns)
         elif method == 'monte':
             su = np.random.rand(self.Ns, self.d)
-        else:
-            raise ValueError("Invalid method for distribution.")
-
         # Transform samples according to distribution
         if dist_type == 'normal':
             fx = norm.ppf(su)
@@ -182,51 +150,44 @@ class sample:
             for i in range(self.d):
                 fx[:, i] = (xmax[i] - xmin[i]) * su[:, i] + xmin[i]
             self.fx = fx
-
         return self.fx
 
-    def create_gci_samples(self, csv_name, input_values, panel_sizes, input_names=None, num_samples=None, solver=None):
+    def create_gci_samples(self, csv_name, evaluation_point, panel_sizes, input_names=None, num_samples=None, solver=None):
         """
         Create and save samples for a GCI study, where all input parameters are the same
         and only the panel size varies for each sample.
 
         Args:
             csv_name (str): Output CSV filename.
-            input_values (array-like): Input parameter values (length d).
+            evaluation_point (array-like): Input parameter values (length d).
             panel_sizes (array-like): Panel size for each sample (length Ns).
             input_names (list, optional): List of input variable names.
                 Defaults to ['alpha', 'Re', 'flap_deflection', 'xtr_upper', 'xtr_lower'].
             num_samples (int, optional): Override number of samples for this call.
             solver (str, optional): Override solver type for this call.
-
-        Raises:
-            ValueError: If input dimensions do not match.
-            IOError: If file writing fails.
         """
+        # Set sample size and solver if provided
         if num_samples is not None:
             self.Ns = num_samples
         else:
             self.Ns = len(panel_sizes)
         if solver is not None:
             self.solver = solver
-        self.d = len(input_values)
+        self.d = len(evaluation_point)
         if input_names is None:
             input_names = ['alpha', 'Re', 'flap_deflection', 'xtr_upper', 'xtr_lower']
-        if self.d != len(input_names):
-            raise ValueError("Length of input_values and input_names must match.")
-        fx = np.tile(input_values, (self.Ns, 1))
+        # Create repeated input values and append panel sizes
+        fx = np.tile(evaluation_point, (self.Ns, 1))
         panel_sizes = np.array(panel_sizes).reshape(-1, 1)
         header1 = [self.solver, self.d, self.Ns]
         header2 = input_names + ['panel_size']
         df = pd.DataFrame(np.hstack([fx, panel_sizes]), columns=header2)
         out_path = self.dir + '/input/' + csv_name
-        try:
-            with open(out_path, 'w', newline='') as f:
-                f.write(','.join(map(str, header1)) + '\n')
-                f.write(','.join(header2) + '\n')
-            df.to_csv(out_path, mode='a', index=False, header=False)
-        except Exception as e:
-            raise IOError(f"Failed to write GCI samples to file: {e}")
+        # Write headers and data to CSV
+        with open(out_path, 'w', newline='') as f:
+            f.write(','.join(map(str, header1)) + '\n')
+            f.write(','.join(header2) + '\n')
+        df.to_csv(out_path, mode='a', index=False, header=False)
     
     def mix_krig(self, csv_name, xmin, xmax, epi_Ns=32, input_names=None, num_samples=None, solver=None):
         """
@@ -247,16 +208,19 @@ class sample:
             self.Ns: Total number of samples.
             self.d: Number of input variables.
         """
+        # Set sample size and solver if provided
         if num_samples is not None:
             self.Ns = num_samples
         if solver is not None:
             self.solver = solver
+        # Generate Sobol and epistemic samples
+        self.Ns = self.Ns-epi_Ns
         sobol_fx = self.sample('uniform', 'sobol', xmin, xmax)
         self.Ns = epi_Ns
         epi_fx = self.sample('epistemic', 'factorial', xmin, xmax)
+        # Combine samples and save
         self.fx = np.vstack((sobol_fx, epi_fx))
         self.Ns = self.fx.shape[0]
         self.d = self.fx.shape[1]
-        out_path = self.dir + '/input/' + csv_name
         if input_names is not None:
-            self.save_samples(out_path, input_names=input_names)
+            self.save_samples(csv_name, input_names=input_names)
