@@ -5,12 +5,10 @@ import numpy as np
 import pandas as pd
 from subprocess import Popen, TimeoutExpired, DEVNULL
 from time import monotonic as timer
-sys.path.append(os.path.join(os.getcwd(), "src/solvers"))
-from mfoil import *
 
 # WARNING:
-# Forced transition (xtr_upper, xtr_lower) as used in the UQDG challenge problem is NOT available for the Python version of mfoil.
-# If you require forced transition, use the MATLAB version of mfoil.
+# Forced transition (xtr_upper, xtr_lower) as used in the UQDG challenge problem is available for xfoil.
+# The Python version only supports xfoil solver.
 
 
 def check_line_data(file_path, line_number):
@@ -26,9 +24,9 @@ def check_line_data(file_path, line_number):
 
 class solver_eval:
     """
-    Base class for running aerodynamic analyses using xfoil or mfoil.
+    Base class for running aerodynamic analyses using xfoil (Python version).
 
-    This class reads a double-header CSV input file, runs the specified solver for each sample,
+    This class reads a double-header CSV input file, runs xfoil for each sample,
     and writes results to output files. Supports UQ, mesh convergence (GCI), and solver verification.
 
     Input CSV format:
@@ -78,9 +76,11 @@ class solver_eval:
         with open(csv_path, 'r') as f:
             first_header = f.readline().strip().split(',')
         
-        self.solver = first_header[0]
+        # Force xfoil solver for Python version (ignore CSV header)
+        self.solver = 'xfoil'
         self.d = int(first_header[1])
         self.Ns = int(first_header[2])
+        print("Python version: Forced to use xfoil solver")
 
         #Use pandas to read the CSV file
         self.df = pd.read_csv(csv_path, skiprows=1)
@@ -128,28 +128,6 @@ class solver_eval:
         if os.path.exists(input_path):
             os.remove(input_path)
 
-    def msolve(self, msolve):
-        """
-        Runs mfoil for a single case.
-        Sets solver parameters, runs, and saves results to self.results.
-        """
-        msolve.param.doplot = False #Does not print the plots
-        msolve.param.rtol = self.conv_tol #Convergence tolerance for mfoil
-        msolve.param.verb = 0 #Hides the prints of mfoil
-        try:
-            msolve.solve()
-            
-            if msolve.glob.conv == True:
-                #Saves the coefficient of lift and moment
-                self.results = np.array([msolve.post.cl,msolve.post.cm])
-            else:
-                #If the solver did not converge, sets the results to 0
-                self.results = np.array([0,0])
-        except Exception as e:
-            # Handle any exception during mfoil solve
-            print(f"Exception during mfoil solve: {e}")
-            self.results = np.array([0,0])
-
     def write_xfoil_input(self, input_index, panel_size=None, include_eps=False):
         """
         Writes the xfoil input script for a single case.
@@ -177,7 +155,8 @@ class solver_eval:
         input_file.write(f"xtr {self.df['xtr_upper'][input_index]} {self.df['xtr_lower'][input_index]}\n")
         if include_eps:
             input_file.write(f"eps {self.conv_tol}\n")
-        input_file.write("\n pacc 1\n")
+        input_file.write("\n")
+        input_file.write("pacc 1\n")
         input_file.write(self.dir + "/output/" + self.polar_file + "\n\n")
         input_file.write(f"ITER {self.num_of_iter}\n")
         input_file.write(f"alfa {self.df['alpha'][input_index]}\n\nquit\n")
@@ -251,16 +230,8 @@ class solver_eval:
         else:
             panel = panel_size if panel_size is not None else self.panel_size
 
-        if self.solver == 'xfoil':
-            self.write_xfoil_input(input_index, panel_size=panel, include_eps=include_eps)
-            self.xsolve()
-            self.results = np.array([self.out[1], self.out[4]])
-        elif self.solver == 'mfoil':
-            mfoil_airfoil = re.sub(r'\D', '', self.airfoil_name)
-            m = mfoil(naca=mfoil_airfoil, npanel=panel)
-            m.geom_flap(np.float64([0.7, 0.015]), self.df['flap_deflection'][input_index])
-            m.setoper(alpha=self.df['alpha'][input_index], Re=self.df['Re'][input_index], Ma=0, visc=True)
-            self.msolve(m)
-        else:
-            print("INCORRECT SOLVER")
+        # Python version only uses xfoil
+        self.write_xfoil_input(input_index, panel_size=panel, include_eps=include_eps)
+        self.xsolve()
+        self.results = np.array([self.out[1], self.out[4]])
 

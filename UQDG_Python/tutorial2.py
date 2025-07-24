@@ -2,7 +2,7 @@
 Tutorial: Polynomial Chaos Expansion Surrogate Modeling for Aerodynamic Analysis
 
 This script demonstrates how to:
-- Generate training and validation samples for XFOIL/mfoil.
+- Generate training and validation samples for xfoil.
 - Evaluate the solver on both sets.
 - Assemble a polynomial chaos surrogate model using training data.
 - Evaluate the surrogate on validation data.
@@ -19,7 +19,7 @@ Steps:
 7. Evaluate surrogate predictions on validation samples.
 8. Compute and print RMSE for surrogate accuracy.
 
-Modify the 'solver' argument in smp.sample(...) to 'xfoil' or 'mfoil' as needed.
+NOTE: Python version automatically uses xfoil solver.
 """
 
 import UQDGmxfoil.sample as smp
@@ -35,7 +35,7 @@ xmin = [-0.3, 492500, -0.24, 0.255, 0.637]
 xmax = [0.3, 507500, 0.24, 0.345, 0.763]
 
 # Step 1: Create a training input file using Sobol sequence
-# Change solver='xfoil' to solver='mfoil' to use mfoil instead
+# NOTE: Python version automatically uses xfoil solver
 smp.sample(num_samples=50, 
            solver='xfoil').create_samples('training_samples_poly.csv', 
                                           'uniform', 
@@ -85,3 +85,5 @@ RMSE = uq.uq_analysis().surrogate_RMSE(
 # Step 8: Print RMSE for Cl and Cm
 print("Cl surrogate RMSE:", RMSE[0])
 print("Cm surrogate RMSE:", RMSE[1])
+
+print("\nTutorial 2 completed successfully!")
