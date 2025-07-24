@@ -35,29 +35,29 @@ input_names = {'alpha', 'Re', 'flap_deflection', 'xtr_upper', 'xtr_lower'};
 xmin = [-0.3, 492500, -0.24, 0.255, 0.637];
 xmax = [0.3, 507500, 0.24, 0.345, 0.763];
 
-% % Step 1: Create a training input file for kriging
-% % NOTE: MATLAB version automatically uses mfoil solver
-% fprintf('Step 1: Creating mixed kriging training samples...\n');
-% training_sampler = sample(50, 'mfoil');
-% training_sampler.mix_krig('training_samples_krig.csv', xmin, xmax, ...
-%                          'input_names', input_names);
+% Step 1: Create a training input file for kriging
+% NOTE: MATLAB version automatically uses mfoil solver
+fprintf('Step 1: Creating mixed kriging training samples...\n');
+training_sampler = sample(50, 'mfoil');
+training_sampler.mix_krig('training_samples_krig.csv', xmin, xmax, ...
+                         'input_names', input_names);
 
-% % Step 2: Evaluate the solver with the training samples
-% fprintf('Step 2: Evaluating solver with training samples...\n');
-% training_solver = solver_eval('training_samples_krig.csv');
-% training_solver.run();
+% Step 2: Evaluate the solver with the training samples
+fprintf('Step 2: Evaluating solver with training samples...\n');
+training_solver = solver_eval('training_samples_krig.csv');
+training_solver.run();
 
-% % Step 3: Create a validation input file using Monte Carlo sampling
-% % WARNING: If 'validation_samples.csv' already exists, comment out the line below to avoid appending to previous files.
-% fprintf('Step 3: Creating validation samples using Monte Carlo...\n');
-% validation_sampler = sample(100, 'mfoil');
-% validation_sampler.create_samples('validation_samples.csv', 'uniform', 'monte', ...
-%                                  xmin, xmax, 'input_names', input_names);
+% Step 3: Create a validation input file using Monte Carlo sampling
+% WARNING: If 'validation_samples.csv' already exists, comment out the line below to avoid appending to previous files.
+fprintf('Step 3: Creating validation samples using Monte Carlo...\n');
+validation_sampler = sample(100, 'mfoil');
+validation_sampler.create_samples('validation_samples.csv', 'uniform', 'monte', ...
+                                 xmin, xmax, 'input_names', input_names);
 
-% % Step 4: Evaluate the solver with the validation samples
-% fprintf('Step 4: Evaluating solver with validation samples...\n');
-% validation_solver = solver_eval('validation_samples.csv');
-% validation_solver.run();
+% Step 4: Evaluate the solver with the validation samples
+fprintf('Step 4: Evaluating solver with validation samples...\n');
+validation_solver = solver_eval('validation_samples.csv');
+validation_solver.run();
 
 % Step 5: Assemble the kriging surrogate model using training data
 fprintf('Step 5: Assembling kriging surrogate model...\n');

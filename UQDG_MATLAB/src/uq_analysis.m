@@ -158,3 +158,7 @@ classdef uq_analysis < handle
             sur_data = table2array(df_sur);
             rmse = sqrt(mean((in_data - sur_data).^2, 1));
         end
+        
+    end % methods
+    
+end % classdef
