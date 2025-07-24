@@ -328,5 +328,4 @@ function var = gaussian_variogram(magh, Co, C, a)
     %   var: Variogram value(s) - preserves input dimensions
     
     var = Co + C * (1 - exp(-(magh / a).^2));
-    % Don't force column vector - preserve original dimensions
 end
