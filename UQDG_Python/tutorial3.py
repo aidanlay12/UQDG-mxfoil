@@ -47,7 +47,7 @@ xmeval.solver_eval('training_samples_krig.csv').run()
 
 # Step 3: Create a validation input file using Monte Carlo sampling
 # WARNING: If 'validation_samples.csv' already exists, comment out the line below to avoid appending to previous files.
-smp.sample(num_samples=10000, 
+smp.sample(num_samples=100, 
            solver='xfoil').create_samples('validation_samples.csv', 
                                          'uniform', 
                                          'monte', 
@@ -62,14 +62,14 @@ xmeval.solver_eval('validation_samples.csv').run()
 krig = km.krig_model()
 krig.assemble_surrogate(
     training_data_file='training_samples_krig.csv',
-    sur_file='krig_model.sur',
+    sur_file='krig_model.txt',
     xmin=xmin,
     xmax=xmax
 )
 
 # Step 6: Evaluate the surrogate model on validation samples
 krig.evaluate_surrogate('validation_samples.csv',          # CSV file with input samples
-                        'krig_model.sur'                   # Surrogate model file
+                        'krig_model.txt'                   # Surrogate model file
 )
 
 # Step 7: Compute RMSE between surrogate predictions and actual outputs

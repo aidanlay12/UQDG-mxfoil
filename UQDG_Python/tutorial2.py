@@ -49,7 +49,7 @@ xmeval.solver_eval('training_samples_poly.csv').run()
 
 # Step 3: Create a validation input file using Monte Carlo sampling
 # WARNING: If 'validation_samples.csv' already exists, comment out the line below to avoid appending to previous files.
-smp.sample(num_samples=10000, 
+smp.sample(num_samples=100, 
            solver='xfoil').create_samples('validation_samples.csv', 
                                           'uniform', 
                                           'monte', 

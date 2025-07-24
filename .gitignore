@@ -1,6 +1,7 @@
 # Ignore all CSV and IN files
 *.csv
 *.in
+*.txt
 
 # Python cache and build artifacts
 __pycache__/
