@@ -108,6 +108,7 @@ alpha,Re,flap_deflection,xtr_upper,xtr_lower
 - **`*_out.csv`**: Solver results (Cl, Cm columns)
 - **`*_fail.csv`**: Failed cases with input parameters
 - **`*_sout.csv`**: Surrogate model predictions
+- **`*_krig.txt`**: Kriging surrogate model files (Python implementation)
 
 ## Tutorials
 
