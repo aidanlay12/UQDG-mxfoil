@@ -101,7 +101,7 @@ class solver_eval:
             os.remove(polar_path)
         
         #Executes xfoil and silences the terminal prints
-        with Popen(self.dir+"/src/solvers/xfoil" +" < "+self.dir+"/input/"+self.xinput_file,shell=True,stdout=DEVNULL) as process:
+        with Popen(self.dir+"/src/solvers/xfoil" +" < "+self.dir+"/input/"+self.xinput_file,shell=True) as process:
             try:
                 process.communicate(timeout=15)
             except TimeoutExpired:
@@ -157,7 +157,8 @@ class solver_eval:
             input_file.write(f"eps {self.conv_tol}\n")
         input_file.write("\n")
         input_file.write("pacc 1\n")
-        input_file.write(self.dir + "/output/" + self.polar_file + "\n\n")
+        input_file.write("output/" + self.polar_file + "\n\n")
+        input_file.write("n\n")                   # Answer "Set current parameters to old dump file values ? y/n>"
         input_file.write(f"ITER {self.num_of_iter}\n")
         input_file.write(f"alfa {self.df['alpha'][input_index]}\n\nquit\n")
         input_file.close()
